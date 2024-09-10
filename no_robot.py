@@ -757,7 +757,6 @@ def gesture_recognition():
             pass
         cv2.destroyAllWindows()
 
-# send speed 0!!!
 def start():
     global root
     root = tk.Tk()

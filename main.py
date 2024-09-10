@@ -1,3 +1,4 @@
+import socket
 import pyrealsense2 as rs
 import numpy as np
 import cv2
@@ -16,6 +17,12 @@ from utils import CvFpsCalc
 from model import KeyPointClassifier
 from model import PointHistoryClassifier
 
+def send_speed(spd):
+    global conn, addr
+    command = "SPD"+str(int(spd))
+    conn.send(command.encode())
+    # print(command)
+
 def gesture_speed(hand_sign):
     global robot_speed, speed_var_gesture, prev_hand_sign, count_gesture, count_frame, Stop, Go
     if prev_hand_sign == hand_sign:
@@ -29,6 +36,7 @@ def gesture_speed(hand_sign):
             if robot_speed > 0.0 and count_frame >= 3:
                 robot_speed = round(robot_speed - 0.1, 1)
                 speed_var_gesture.set(f"{int(robot_speed * 100)}%")
+                send_speed(robot_speed * 100)
                 Stop = True
                 count_frame = 0
             elif robot_speed <= 0.0:
@@ -37,6 +45,7 @@ def gesture_speed(hand_sign):
             if robot_speed < 1.0 and count_frame >= 3:
                 robot_speed = round(robot_speed + 0.1, 1)
                 speed_var_gesture.set(f"{int(robot_speed * 100)}%")
+                send_speed(robot_speed * 100)
                 Go = True
                 count_frame = 0
             elif robot_speed >= 1.0:
@@ -45,11 +54,13 @@ def gesture_speed(hand_sign):
             if robot_speed < 1.0 and count_frame >= 10:
                 robot_speed = round(robot_speed + 0.1, 1)
                 speed_var_gesture.set(f"{int(robot_speed * 100)}%")
+                send_speed(robot_speed * 100)
                 count_frame = 0
         elif hand_sign == "Thumbs_Down":
             if robot_speed > 0.0 and count_frame >= 10:
                 robot_speed = round(robot_speed - 0.1, 1)
                 speed_var_gesture.set(f"{int(robot_speed * 100)}%")
+                send_speed(robot_speed * 100)
                 count_frame = 0
         else:
             pass    # proizvoljno
@@ -67,7 +78,7 @@ def starting_speed(speed):
         time.sleep(0.1)
 
 def quit():
-    global Quit
+    global Quit, conn
     starting_speed(0.0)
     try:
         pipeline.stop()
@@ -83,6 +94,10 @@ def quit():
         pass
     try:
         hands.close()
+    except:
+        pass
+    try:
+        conn.close()
     except:
         pass
     cv2.destroyAllWindows()
@@ -242,6 +257,7 @@ def set_speed(x, *args):
             robot_speed = round(robot_speed - 0.1, 1)
             if not args:
                 speed_var.set(f"{int(robot_speed * 100)}%")
+            send_speed(robot_speed * 100)
         return
     if robot_speed == 0.0 and x < 0.8:  # vraćanje u zonu 2
         count = 0
@@ -261,6 +277,7 @@ def set_speed(x, *args):
                 robot_speed = round(robot_speed + 0.1, 1)
             if not args:
                 speed_var.set(f"{int(robot_speed * 100)}%")
+            send_speed(robot_speed * 100)
             count = 0
     else:
         count = 1
@@ -534,10 +551,14 @@ def safety():
             pose.close()
         except:
             pass
+        try:
+            conn.close()
+        except:
+            pass
         cv2.destroyAllWindows()
 
 def gesture_recognition():
-    global robot_speed, speed_var_gesture, count_gesture, prev_hand_sign, Stop, Go
+    global robot_speed, speed_var_gesture, count_gesture, prev_hand_sign, Stop, Go, conn
     starting_speed(0.0)
     try:
         try:
@@ -755,17 +776,29 @@ def gesture_recognition():
             hands.close()
         except:
             pass
+        try:
+            conn.close()
+        except:
+            pass
         cv2.destroyAllWindows()
 
-# send speed 0!!!
 def start():
-    destroy_all_widgets(root)
+    global root
+    send_speed(0)
+    root = tk.Tk()
+    root.title("RealSense Viewer")
 
-    # Kreiranje okvira koji će sadržavati gumbe
+    root.configure(bg="#2C3E50")
+    root.attributes("-fullscreen", True)
+
+    def toggle_fullscreen(event=None):
+        root.attributes("-fullscreen", not root.attributes("-fullscreen"))
+
+    root.bind("<Escape>", toggle_fullscreen)
+
     button_frame = tk.Frame(root, bg="#2C3E50")
-    button_frame.pack(expand=True, pady=(100,0))
+    button_frame.pack(expand=True, pady=(100, 0))
 
-    # Kreiranje gumbova
     safety_button = tk.Button(button_frame, text="SAFETY", font=("Helvetica", 20, "bold"), command=safety, bg="#2ECC71",
                               fg="#ECF0F1", padx=20, pady=10)
     gesture_recognition_button = tk.Button(button_frame, text="GESTURE RECOGNITION", font=("Helvetica", 20, "bold"),
@@ -776,44 +809,25 @@ def start():
 
     safety_button.pack(pady=20)
     gesture_recognition_button.pack(pady=20)
-    quit_button.pack(pady=(120,20))
+    quit_button.pack(pady=(120, 20))
 
     root.mainloop()
 
 def robot_connection():
-    global root
-    root = tk.Tk()
-    root.title("RealSense Viewer")
+    global conn, addr
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    host = '192.168.40.152'  # Loopback address for local testing
+    port = 8000  # You can choose any available port
 
-    # Postavljanje prozora u full screen
-    root.configure(bg="#2C3E50")
-    root.attributes("-fullscreen", True)
+    server_socket.bind((host, port))
+    server_socket.listen(1)
 
-    # Definirajte funkciju za izlaz iz full screen moda
-    def toggle_fullscreen(event=None):
-        root.attributes("-fullscreen", not root.attributes("-fullscreen"))
+    print(f"Server listening on {host}:{port}")
 
-    # Bindenje tipke ESC za izlaz iz full screen moda
-    root.bind("<Escape>", toggle_fullscreen)
+    conn, addr = server_socket.accept()
+    print(f"Connection established with {addr}")
 
-    right_frame = tk.Frame(root, width=480, height=720, bg="#2C3E50")
-    right_frame.grid(row=0, column=0, padx=(10, 1000), pady=10)
-    button_frame = tk.Frame(root, width=480, height=720, bg="#2C3E50")
-    button_frame.grid(row=1, column=0, padx=702, pady=437)
-
-    connect = tk.StringVar()
-    connect.set("Connecting with the robot...")
-
-    connect_font = font.Font(family="Helvetica", size=30, weight="bold")
-    connect_label = tk.Label(right_frame, textvariable=connect, font=connect_font, bg="#2C3E50", fg="#ECF0F1")
-    connect_label.pack(side="left")
-
-    quit_button = tk.Button(button_frame, text="QUIT", font=("Helvetica", 20, "bold"),
-                            command=start,
-                            bg="#E74C3C", fg="#ECF0F1", padx=20, pady=10)
-    quit_button.pack(pady=100)
-
-    root.mainloop()
+    start()
 
 r0, r1, r2 = 2, 4, 6    # 2, 3.5, 5.5
 vm, vh, vbh, vt = 0.1, 1.2, 1.7, 2.5
