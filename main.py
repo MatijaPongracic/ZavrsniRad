@@ -405,6 +405,14 @@ def update_frame():
         color_image = draw_info(color_image, fps, 0, -1)
         color_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
         color_image = cv2.resize(color_image, (960, 720))
+        y1 = (r1 + r0) / (2 * r1)
+        y2 = (r2 + r0) / (2 * r2)
+        cv2.line(color_image, (0, int(y1 * 720)), (960, int(y1 * 720)), (255, 0, 0), 2)
+        cv2.line(color_image, (0, int(y2 * 720)), (960, int(y2 * 720)), (255, 255, 0), 2)
+        cv2.putText(color_image, "ZONE 2", (800, int(y2 * 720 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2,
+                    cv2.LINE_AA)
+        cv2.putText(color_image, "ZONE 1", (800, int(y1 * 720 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2,
+                    cv2.LINE_AA)
         img = Image.fromarray(color_image)
         imgtk = ImageTk.PhotoImage(image=img)
         video_label.imgtk = imgtk
